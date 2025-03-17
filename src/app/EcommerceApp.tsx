@@ -388,7 +388,6 @@ const EcommerceApp = () => {
                     </span>
                   ) : (
                     <span className="flex items-center">
-                      <ShoppingCart className="mr-2" size={16} />
                       Add to Cart
                     </span>
                   )}
@@ -607,7 +606,7 @@ const EcommerceApp = () => {
                   onClick={() => setCurrentPage('cart')}
                   className="flex items-center  py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition duration-200"
                 >
-                  <ShoppingCart size={20} />  <span className="ml-2">My Cart</span>
+                  <span>My Cart</span>
                   {cart.length > 0 && (
                     <span className="ml-2 bg-white text-blue-600 text-xs rounded-full h-5 w-5 flex items-center justify-center">
                       {cart.reduce((total, item: any) => total + item.quantity, 0)}
