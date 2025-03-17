@@ -229,7 +229,7 @@ const EcommerceApp = () => {
         <form onSubmit={handleOtpVerification}>
           <div className="mb-6">
             <label className="block text-gray-700 text-sm font-medium mb-2" htmlFor="otp">
-              Enter OTP
+              OTP
             </label>
             <input
               id="otp"
