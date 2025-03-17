@@ -604,11 +604,11 @@ const EcommerceApp = () => {
                 </div>
                 <button
                   onClick={() => setCurrentPage('cart')}
-                  className="flex items-center  py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition duration-200"
+                  className="flex items-center  py-2 px-4 text-gray-700 font-medium"
                 >
                   <span>My Cart</span>
                   {cart.length > 0 && (
-                    <span className="ml-2 bg-white text-blue-600 text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                    <span className="ml-2 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                       {cart.reduce((total, item: any) => total + item.quantity, 0)}
                     </span>
                   )}
