@@ -1,7 +1,7 @@
 "use client"
 import React, { useState } from 'react';
 import { Laptop, ShoppingCart, User, CheckCircle } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert';
 
 // Product data
 const products = [
@@ -602,7 +602,7 @@ const EcommerceApp = () => {
                   onClick={() => setCurrentPage('cart')}
                   className="flex items-center text-gray-700 hover:text-blue-600"
                 >
-                  <ShoppingCart size={20} />
+                  <ShoppingCart size={20} />  <span className="ml-2">My Cart</span>
                   {cart.length > 0 && (
                     <span className="ml-1 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                       {cart.reduce((total, item: any) => total + item.quantity, 0)}
