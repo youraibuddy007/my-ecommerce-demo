@@ -207,7 +207,7 @@ const EcommerceApp = () => {
           
           <button
             type="submit"
-            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition duration-200"
+            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md"
           >
             Send OTP
           </button>
@@ -256,7 +256,7 @@ const EcommerceApp = () => {
           
           <button
             type="submit"
-            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition duration-200"
+            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md"
           >
             Verify & Continue
           </button>
@@ -264,7 +264,7 @@ const EcommerceApp = () => {
           <button
             type="button"
             onClick={() => setCurrentPage('phone-login')}
-            className="w-full mt-4 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50 transition duration-200"
+            className="w-full mt-4 py-2 px-4 bg-white border border-gray-300 text-gray-700 font-medium rounded-md hover:bg-gray-50"
           >
             Back to Phone Number
           </button>
@@ -306,7 +306,7 @@ const EcommerceApp = () => {
                   e.stopPropagation();
                   addToCart(product);
                 }}
-                className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-200 relative overflow-hidden"
+                className="w-full py-2 px-4 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 transition duration-200 relative overflow-hidden"
               >
                 {addedToCart === product.id ? (
                   <span className="flex items-center justify-center">
@@ -379,7 +379,7 @@ const EcommerceApp = () => {
               <div className="flex space-x-4">
                 <button
                   onClick={() => addToCart(selectedProduct)}
-                  className="flex-1 py-3 px-6 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-200 flex items-center justify-center"
+                  className="flex-1 py-3 px-6 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 transition duration-200 flex items-center justify-center"
                 >
                   {addedToCart === selectedProduct.id ? (
                     <span className="flex items-center justify-center">
@@ -398,7 +398,7 @@ const EcommerceApp = () => {
                     addToCart(selectedProduct);
                     setCurrentPage('cart');
                   }}
-                  className="flex-1 py-3 px-6 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition duration-200"
+                  className="flex-1 py-3 px-6 bg-gray-800 text-white rounded-md hover:bg-gray-900"
                 >
                   Buy Now
                 </button>
@@ -576,7 +576,7 @@ const EcommerceApp = () => {
           
           <button
             type="submit"
-            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition duration-200"
+            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md"
           >
             Place Order
           </button>
@@ -604,7 +604,7 @@ const EcommerceApp = () => {
                 </div>
                 <button
                   onClick={() => setCurrentPage('cart')}
-                  className="flex items-center  py-2 px-4 text-gray-700 font-medium"
+                  className="flex items-center font-bold py-2 px-4 text-gray-700 font-medium"
                 >
                   <span>My Cart</span>
                   {cart.length > 0 && (
