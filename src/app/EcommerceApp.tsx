@@ -576,7 +576,7 @@ const EcommerceApp = () => {
           
           <button
             type="submit"
-            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md"
+            className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 font-bold text-white font-medium rounded-md"
           >
             Place Order
           </button>
@@ -597,25 +597,14 @@ const EcommerceApp = () => {
           
           <div className="flex items-center space-x-4">
             {currentPage !== 'login' && currentPage !== 'cart' && (
-              <>
-              <div className="flex items-center text-gray-700">
-                  <User size={20} />
-                  <span className="ml-2">{userName}</span>
-                </div>
+
                 <button
                   onClick={() => setCurrentPage('cart')}
                   className="flex items-center font-bold py-2 px-4 text-gray-700 font-medium"
                 >
-                  <span>My Cart</span>
-                  {cart.length > 0 && (
-                    <span className="ml-2 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                      {cart.reduce((total, item: any) => total + item.quantity, 0)}
-                    </span>
-                  )}
+                  <span>My Cart {cart.reduce((total, item: any) => total + item.quantity, 0)}</span>
                 </button>
                 
-                
-              </>
             )}
           </div>
         </div>
