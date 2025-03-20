@@ -602,7 +602,7 @@ const EcommerceApp = () => {
                   onClick={() => setCurrentPage('cart')}
                   className="flex items-center font-bold py-2 px-4 text-gray-700 font-medium"
                 >
-                  <span>My Cart {cart.reduce((total, item: any) => total + item.quantity, 0)}</span>
+                  <span>My Cart</span>
                 </button>
                 
             )}
