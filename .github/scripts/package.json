@@ -1,0 +1,11 @@
+{
+    "name": "ai-pr-reviewer",
+    "version": "1.0.0",
+    "description": "AI PR review tool using local model",
+    "private": true,
+    "dependencies": {
+      "@octokit/rest": "^19.0.5",
+      "node-fetch": "^2.6.9"
+    }
+  }
+  
