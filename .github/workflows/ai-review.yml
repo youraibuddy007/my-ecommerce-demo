@@ -31,7 +31,7 @@ jobs:
         
       - name: Run AI review
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
           AI_API_BASEURL: ${{ secrets.AI_API_BASEURL }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO_OWNER: ${{ github.repository_owner }}
