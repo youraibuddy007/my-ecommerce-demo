@@ -141,97 +141,21 @@ Format your response as JSON:
 }
 `;
 
-      // Get AI review from your local model
-      const aiResponse = await callAIModel(prompt);
-      
-      let review;
-      try {
-        // Try to parse the AI response as JSON
-        // First, see if the response contains a JSON array of issues
-        let jsonString = aiResponse;
-        
-        // Look for JSON in code blocks (the model might wrap JSON in ```json blocks)
-        const codeBlockMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch && codeBlockMatch[1]) {
-          jsonString = codeBlockMatch[1];
-        }
-        
-        // Try to extract a valid JSON object
-        console.log("Attempting to parse AI response...");
-        console.log("Raw response first 1000 chars:", jsonString.substring(0, 1000));
-        
-        // Try different parsing approaches
-        try {
-          // First try direct parsing
-          review = JSON.parse(jsonString);
-        } catch (directError) {
-          console.log("Direct parsing failed, trying alternative approaches");
-          
-          // If that fails, try to build a valid response from the content
-          // This handles cases where the model returns an array of issues instead of the expected format
-          if (jsonString.trim().startsWith('[')) {
-            try {
-              const issues = JSON.parse(jsonString);
-              review = {
-                issues: issues,
-                summary: "Issues found in code review"
-              };
-            } catch (arrayError) {
-              console.log("Array parsing failed:", arrayError);
-              throw arrayError;
-            }
-          } else {
-            // If all else fails, try to extract any JSON object
-            const objectMatch = jsonString.match(/\{[\s\S]*\}/);
-            if (objectMatch) {
-              review = JSON.parse(objectMatch[0]);
-            } else {
-              throw new Error("No valid JSON found in response");
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Error parsing AI response:", e);
-        console.log("Full raw response:", aiResponse);
-        
-        // Create a manual review object by parsing text
-        const lines = aiResponse.split('\n');
-        const issues = [];
-        let currentIssue = null;
-        let summary = "Code review completed with parsing issues";
-        
-        // Try to extract information from text format
-        for (const line of lines) {
-          if (line.includes('line:') || line.includes('Line:') || line.toLowerCase().startsWith('line ')) {
-            // Start a new issue
-            if (currentIssue) issues.push(currentIssue);
-            currentIssue = { 
-              line: parseInt(line.replace(/[^0-9]/g, '')) || null,
-              issue: "",
-              suggestion: "",
-              severity: "medium"
-            };
-          } else if (currentIssue && (line.includes('issue:') || line.includes('Issue:') || line.includes('problem:'))) {
-            currentIssue.issue = line.split(':')[1]?.trim() || line;
-          } else if (currentIssue && (line.includes('suggest') || line.includes('fix') || line.includes('solution'))) {
-            currentIssue.suggestion = line.split(':')[1]?.trim() || line;
-          } else if (line.includes('summary') || line.includes('Summary')) {
-            summary = line.split(':')[1]?.trim() || summary;
-          }
-        }
-        
-        // Add the last issue if there is one
-        if (currentIssue) issues.push(currentIssue);
-        
-        // Fallback: create a review object from the extracted information
-        review = {
-          issues: issues.length > 0 ? issues : [],
-          summary: summary
-        };
-        
-        console.log("Created fallback review object:", JSON.stringify(review, null, 2));
-      }
-      
+  try {
+    // Get AI review from your local model
+    const aiResponse = await callAIModel(prompt);
+    console.log(aiResponse);
+    
+    // Use the improved parsing function
+    const review = sanitizeAndParseJSON(aiResponse);
+    
+    console.log(review);
+    console.log(`Found ${review.issues.length} issues in the review`);
+    
+    // Rest of your code continues as before...
+  } catch (error) {
+    console.error(`Error reviewing ${file.filename}:`, error);
+  }
       // Add file-specific issues to overall list
       if (review.issues && review.issues.length > 0) {
         overallIssues.push(...review.issues.map(issue => ({
@@ -301,3 +225,133 @@ main().catch(error => {
   console.error('Error in review process:', error);
   process.exit(1);
 });
+
+// Add this improved JSON parsing function to your review-pr.js file
+
+function sanitizeAndParseJSON(jsonString) {
+    console.log("Attempting to sanitize and parse AI response...");
+    
+    // First attempt: Try to parse directly
+    try {
+      return JSON.parse(jsonString);
+    } catch (e) {
+      console.log("Direct parsing failed, attempting to fix common JSON syntax errors");
+    }
+    
+    // Second attempt: Fix missing commas between properties
+    try {
+      // This regex looks for a string or number followed by a quote that starts a new property
+      // without a comma in between
+      const fixedJson = jsonString.replace(/(["\d])\s*\n\s*"/g, '$1,\n"');
+      return JSON.parse(fixedJson);
+    } catch (e) {
+      console.log("Fixed comma parsing failed, trying more aggressive approaches");
+    }
+    
+    // Third attempt: Try to extract valid JSON objects and rebuild
+    try {
+      // Extract all valid looking JSON objects using regex
+      const issueMatches = jsonString.match(/\{\s*"line"[\s\S]*?(?:\}\s*,|\}(?!\s*,))/g);
+      
+      if (issueMatches && issueMatches.length > 0) {
+        // Try to fix and parse each issue object
+        const issues = [];
+        
+        for (const issueStr of issueMatches) {
+          try {
+            // Fix trailing commas after the last property
+            const fixedIssueStr = issueStr.replace(/,\s*\}$/, '}');
+            // Add missing commas between properties
+            const sanitizedIssueStr = fixedIssueStr.replace(/(["\d])\s*\n\s*"/g, '$1,\n"');
+            
+            const issue = JSON.parse(sanitizedIssueStr);
+            
+            // Ensure all required fields exist
+            if (!issue.severity) issue.severity = "medium";
+            if (!issue.suggestion) issue.suggestion = "No suggestion provided";
+            
+            issues.push(issue);
+          } catch (issueErr) {
+            console.log(`Failed to parse individual issue: ${issueStr}`);
+          }
+        }
+        
+        // Extract summary if available
+        let summary = "Code review completed with limited parsing";
+        const summaryMatch = jsonString.match(/"summary"\s*:\s*"([^"]+)"/);
+        if (summaryMatch && summaryMatch[1]) {
+          summary = summaryMatch[1];
+        }
+        
+        return {
+          issues: issues,
+          summary: summary
+        };
+      }
+    } catch (e) {
+      console.log("Object extraction failed:", e);
+    }
+    
+    // Final fallback: manual parsing
+    console.log("All JSON parsing attempts failed, falling back to manual parsing");
+    const lines = jsonString.split('\n');
+    const issues = [];
+    let currentIssue = null;
+    let summary = "Code review completed with parsing issues";
+    
+    for (const line of lines) {
+      const lineContent = line.trim();
+      
+      // Try to extract line numbers
+      if (lineContent.includes('"line"') || lineContent.toLowerCase().includes('line:')) {
+        // Start a new issue
+        if (currentIssue) issues.push(currentIssue);
+        
+        const lineMatch = lineContent.match(/(\d+)/);
+        currentIssue = { 
+          line: lineMatch ? parseInt(lineMatch[1]) : null,
+          issue: "",
+          suggestion: "",
+          severity: "medium"
+        };
+      } 
+      // Extract issue description
+      else if (currentIssue && (lineContent.includes('"issue"') || lineContent.includes('issue:'))) {
+        const match = lineContent.match(/"issue"\s*:\s*"([^"]+)"|issue:\s*(.+)/);
+        if (match) {
+          currentIssue.issue = match[1] || match[2] || "";
+        }
+      } 
+      // Extract suggestion
+      else if (currentIssue && (lineContent.includes('"suggestion"') || lineContent.includes('suggestion:'))) {
+        const match = lineContent.match(/"suggestion"\s*:\s*"([^"]+)"|suggestion:\s*(.+)/);
+        if (match) {
+          currentIssue.suggestion = match[1] || match[2] || "";
+        }
+      }
+      // Extract severity
+      else if (currentIssue && (lineContent.includes('"severity"') || lineContent.includes('severity:'))) {
+        const match = lineContent.match(/"severity"\s*:\s*"([^"]+)"|severity:\s*(.+)/);
+        if (match) {
+          currentIssue.severity = (match[1] || match[2] || "").replace(/"/g, '');
+        }
+      }
+      // Extract summary
+      else if (lineContent.includes('"summary"') || lineContent.includes('summary:')) {
+        const match = lineContent.match(/"summary"\s*:\s*"([^"]+)"|summary:\s*(.+)/);
+        if (match) {
+          summary = match[1] || match[2] || summary;
+        }
+      }
+    }
+    
+    // Add the last issue if there is one
+    if (currentIssue) issues.push(currentIssue);
+    
+    return {
+      issues: issues,
+      summary: summary
+    };
+  }
+  
+  
