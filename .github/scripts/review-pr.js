@@ -198,11 +198,12 @@ Format your response as JSON:
   
   // Create a PR review with a summary
   if (overallIssues.length > 0 || overallSuggestions.length > 0) {
+    console.log(overallIssues)
     // Create summary comment
     const summaryBody = `# ReviewRanger AI: Code Review Summary
 
 ${overallIssues.length > 0 ? `## Issues Found (${overallIssues.length})
-${overallIssues.map(issue => `- **${issue.severity.toUpperCase()}** [${issue.file}${issue.line ? `:${issue.line}` : ''}]: ${issue.issue}`).join('\n')}` : ''}
+${overallIssues.map(issue => `- **${issue.severity}** [${issue.file}${issue.line ? `:${issue.line}` : ''}]: ${issue.issue}`).join('\n')}` : ''}
 
 ${overallSuggestions.length > 0 ? `## Summary by File
 ${overallSuggestions.join('\n\n')}` : ''}
