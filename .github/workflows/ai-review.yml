@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd .github/scripts
-          npm ci
+          npm install
         
       - name: Run AI review
         env:
