@@ -13,7 +13,7 @@ const octokit = new Octokit({
 const owner = process.env.REPO_OWNER;
 const repo = process.env.REPO_NAME;
 const pull_number = process.env.PR_NUMBER;
-const baseUrl = process.env.AI_API_BASEURL;
+const baseUrl = process.env.AI_API_BASEURL || 'http://your-company-api-url';
 
 async function callAIModel(prompt) {
   try {
@@ -199,7 +199,7 @@ Format your response as JSON:
   // Create a PR review with a summary
   if (overallIssues.length > 0 || overallSuggestions.length > 0) {
     // Create summary comment
-    const summaryBody = `# AI Code Review Summary
+    const summaryBody = `# ReviewRanger AI: Code Review Summary
 
 ${overallIssues.length > 0 ? `## Issues Found (${overallIssues.length})
 ${overallIssues.map(issue => `- **${issue.severity.toUpperCase()}** [${issue.file}${issue.line ? `:${issue.line}` : ''}]: ${issue.issue}`).join('\n')}` : ''}
@@ -208,7 +208,7 @@ ${overallSuggestions.length > 0 ? `## Summary by File
 ${overallSuggestions.join('\n\n')}` : ''}
 
 ---
-*This review was performed automatically by the AI PR Reviewer bot.*
+*This review was performed automatically by ReviewRanger* 🤠
 `;
 
     // Post the review

@@ -600,7 +600,7 @@ const EcommerceApp = () => {
 
                 <button
                   onClick={() => setCurrentPage('cart')}
-                  className="flex items-center font-bold py-2 px-4 text-gray-700 font-medium"
+                  className="flex items-center font-bold py-2 px-4 rounded-md bg-blue-600 text-white"
                 >
                   <span>My Cart</span>
                 </button>
