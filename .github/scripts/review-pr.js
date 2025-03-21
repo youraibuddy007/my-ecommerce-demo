@@ -140,6 +140,7 @@ Format your response as JSON:
   "summary": "<overall_assessment>"
 }
 `;
+let review;
 
   try {
     // Get AI review from your local model
@@ -147,7 +148,7 @@ Format your response as JSON:
     console.log(aiResponse);
     
     // Use the improved parsing function
-    const review = sanitizeAndParseJSON(aiResponse);
+    review = sanitizeAndParseJSON(aiResponse);
     
     console.log(review);
     console.log(`Found ${review.issues.length} issues in the review`);
