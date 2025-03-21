@@ -228,58 +228,82 @@ main().catch(error => {
 });
 
 // Add this improved JSON parsing function to your review-pr.js file
-
 function sanitizeAndParseJSON(jsonString) {
     console.log("Attempting to sanitize and parse AI response...");
     
+    // Strip code block markers if present (```json and ```)
+    let cleanedJson = jsonString.trim();
+    if (cleanedJson.startsWith("```json")) {
+      cleanedJson = cleanedJson.substring(7);
+    } else if (cleanedJson.startsWith("```")) {
+      cleanedJson = cleanedJson.substring(3);
+    }
+    
+    if (cleanedJson.endsWith("```")) {
+      cleanedJson = cleanedJson.substring(0, cleanedJson.length - 3);
+    }
+    
+    cleanedJson = cleanedJson.trim();
+    
     // First attempt: Try to parse directly
     try {
-      return JSON.parse(jsonString);
+      return JSON.parse(cleanedJson);
     } catch (e) {
       console.log("Direct parsing failed, attempting to fix common JSON syntax errors");
     }
     
     // Second attempt: Fix missing commas between properties
     try {
-      // This regex looks for a string or number followed by a quote that starts a new property
-      // without a comma in between
-      const fixedJson = jsonString.replace(/(["\d])\s*\n\s*"/g, '$1,\n"');
+      // This regex specifically targets the pattern in your example where a property
+      // ends with a quote-value-quote and the next line starts with a quote (property name)
+      // but there's no comma in between
+      const fixedJson = cleanedJson.replace(/("(?:suggestion|issue|severity)":\s*"[^"]*")\s*\n\s*("(?:suggestion|issue|severity)")/g, '$1,\n  $2');
       return JSON.parse(fixedJson);
     } catch (e) {
-      console.log("Fixed comma parsing failed, trying more aggressive approaches");
+      console.log("Fixed comma parsing failed, trying object extraction approach");
     }
     
-    // Third attempt: Try to extract valid JSON objects and rebuild
+    // Third attempt: Extract and fix individual issue objects
     try {
-      // Extract all valid looking JSON objects using regex
-      const issueMatches = jsonString.match(/\{\s*"line"[\s\S]*?(?:\}\s*,|\}(?!\s*,))/g);
+      // For each issue object, extract and fix it
+      const issueObjectRegex = /{[^{]*"line":[^}]*"severity":[^}]*}/g;
+      const issueMatches = cleanedJson.match(issueObjectRegex);
       
       if (issueMatches && issueMatches.length > 0) {
-        // Try to fix and parse each issue object
         const issues = [];
         
         for (const issueStr of issueMatches) {
           try {
-            // Fix trailing commas after the last property
-            const fixedIssueStr = issueStr.replace(/,\s*\}$/, '}');
-            // Add missing commas between properties
-            const sanitizedIssueStr = fixedIssueStr.replace(/(["\d])\s*\n\s*"/g, '$1,\n"');
-            
-            const issue = JSON.parse(sanitizedIssueStr);
-            
-            // Ensure all required fields exist
-            if (!issue.severity) issue.severity = "medium";
-            if (!issue.suggestion) issue.suggestion = "No suggestion provided";
-            
+            // Fix the missing commas in each individual issue object
+            const fixedIssueStr = issueStr
+              .replace(/("suggestion":\s*"[^"]*")\s*\n\s*("severity")/g, '$1,\n    $2')
+              .replace(/("issue":\s*"[^"]*")\s*\n\s*("suggestion")/g, '$1,\n    $2');
+              
+            const issue = JSON.parse(fixedIssueStr);
             issues.push(issue);
           } catch (issueErr) {
             console.log(`Failed to parse individual issue: ${issueStr}`);
+            
+            // Extract fields manually if JSON parsing fails
+            const lineMatch = issueStr.match(/"line":\s*(\d+)/);
+            const issueMatch = issueStr.match(/"issue":\s*"([^"]*)"/);
+            const suggestionMatch = issueStr.match(/"suggestion":\s*"([^"]*)"/);
+            const severityMatch = issueStr.match(/"severity":\s*"([^"]*)"/);
+            
+            if (lineMatch) {
+              issues.push({
+                line: parseInt(lineMatch[1]),
+                issue: issueMatch ? issueMatch[1] : "Unknown issue",
+                suggestion: suggestionMatch ? suggestionMatch[1] : "No suggestion provided",
+                severity: severityMatch ? severityMatch[1] : "medium"
+              });
+            }
           }
         }
         
-        // Extract summary if available
-        let summary = "Code review completed with limited parsing";
-        const summaryMatch = jsonString.match(/"summary"\s*:\s*"([^"]+)"/);
+        // Extract summary
+        let summary = "Code review completed";
+        const summaryMatch = cleanedJson.match(/"summary":\s*"([^"]*)"/);
         if (summaryMatch && summaryMatch[1]) {
           summary = summaryMatch[1];
         }
@@ -290,69 +314,66 @@ function sanitizeAndParseJSON(jsonString) {
         };
       }
     } catch (e) {
-      console.log("Object extraction failed:", e);
+      console.log("Issue extraction failed:", e);
     }
     
-    // Final fallback: manual parsing
-    console.log("All JSON parsing attempts failed, falling back to manual parsing");
-    const lines = jsonString.split('\n');
+    // Final fallback: Try a line-by-line parsing approach
+    console.log("All JSON parsing attempts failed, falling back to line-by-line parsing");
+    
+    const lines = cleanedJson.split('\n');
     const issues = [];
     let currentIssue = null;
     let summary = "Code review completed with parsing issues";
     
     for (const line of lines) {
-      const lineContent = line.trim();
+      const trimmedLine = line.trim();
       
-      // Try to extract line numbers
-      if (lineContent.includes('"line"') || lineContent.toLowerCase().includes('line:')) {
-        // Start a new issue
-        if (currentIssue) issues.push(currentIssue);
+      if (trimmedLine.includes('"line":')) {
+        // Start of a new issue
+        if (currentIssue) {
+          issues.push(currentIssue);
+        }
         
-        const lineMatch = lineContent.match(/(\d+)/);
-        currentIssue = { 
-          line: lineMatch ? parseInt(lineMatch[1]) : null,
+        const lineNumberMatch = trimmedLine.match(/"line":\s*(\d+)/);
+        const lineNumber = lineNumberMatch ? parseInt(lineNumberMatch[1]) : null;
+        
+        currentIssue = {
+          line: lineNumber,
           issue: "",
           suggestion: "",
           severity: "medium"
         };
-      } 
-      // Extract issue description
-      else if (currentIssue && (lineContent.includes('"issue"') || lineContent.includes('issue:'))) {
-        const match = lineContent.match(/"issue"\s*:\s*"([^"]+)"|issue:\s*(.+)/);
+      } else if (currentIssue && trimmedLine.includes('"issue":')) {
+        const match = trimmedLine.match(/"issue":\s*"([^"]*)"/);
         if (match) {
-          currentIssue.issue = match[1] || match[2] || "";
+          currentIssue.issue = match[1];
         }
-      } 
-      // Extract suggestion
-      else if (currentIssue && (lineContent.includes('"suggestion"') || lineContent.includes('suggestion:'))) {
-        const match = lineContent.match(/"suggestion"\s*:\s*"([^"]+)"|suggestion:\s*(.+)/);
+      } else if (currentIssue && trimmedLine.includes('"suggestion":')) {
+        const match = trimmedLine.match(/"suggestion":\s*"([^"]*)"/);
         if (match) {
-          currentIssue.suggestion = match[1] || match[2] || "";
+          currentIssue.suggestion = match[1];
         }
-      }
-      // Extract severity
-      else if (currentIssue && (lineContent.includes('"severity"') || lineContent.includes('severity:'))) {
-        const match = lineContent.match(/"severity"\s*:\s*"([^"]+)"|severity:\s*(.+)/);
+      } else if (currentIssue && trimmedLine.includes('"severity":')) {
+        const match = trimmedLine.match(/"severity":\s*"([^"]*)"/);
         if (match) {
-          currentIssue.severity = (match[1] || match[2] || "").replace(/"/g, '');
+          currentIssue.severity = match[1];
         }
-      }
-      // Extract summary
-      else if (lineContent.includes('"summary"') || lineContent.includes('summary:')) {
-        const match = lineContent.match(/"summary"\s*:\s*"([^"]+)"|summary:\s*(.+)/);
+      } else if (trimmedLine.includes('"summary":')) {
+        const match = trimmedLine.match(/"summary":\s*"([^"]*)"/);
         if (match) {
-          summary = match[1] || match[2] || summary;
+          summary = match[1];
         }
       }
     }
     
     // Add the last issue if there is one
-    if (currentIssue) issues.push(currentIssue);
+    if (currentIssue) {
+      issues.push(currentIssue);
+    }
     
     return {
       issues: issues,
       summary: summary
     };
   }
-  
   
