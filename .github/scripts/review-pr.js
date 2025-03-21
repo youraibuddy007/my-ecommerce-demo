@@ -147,19 +147,89 @@ Format your response as JSON:
       let review;
       try {
         // Try to parse the AI response as JSON
-        // If the model doesn't return properly formatted JSON, this will try to find and extract JSON content
-        const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-        const jsonString = jsonMatch ? jsonMatch[0] : aiResponse;
-        review = JSON.parse(jsonString);
+        // First, see if the response contains a JSON array of issues
+        let jsonString = aiResponse;
+        
+        // Look for JSON in code blocks (the model might wrap JSON in ```json blocks)
+        const codeBlockMatch = aiResponse.match(/```json\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch && codeBlockMatch[1]) {
+          jsonString = codeBlockMatch[1];
+        }
+        
+        // Try to extract a valid JSON object
+        console.log("Attempting to parse AI response...");
+        console.log("Raw response first 1000 chars:", jsonString.substring(0, 1000));
+        
+        // Try different parsing approaches
+        try {
+          // First try direct parsing
+          review = JSON.parse(jsonString);
+        } catch (directError) {
+          console.log("Direct parsing failed, trying alternative approaches");
+          
+          // If that fails, try to build a valid response from the content
+          // This handles cases where the model returns an array of issues instead of the expected format
+          if (jsonString.trim().startsWith('[')) {
+            try {
+              const issues = JSON.parse(jsonString);
+              review = {
+                issues: issues,
+                summary: "Issues found in code review"
+              };
+            } catch (arrayError) {
+              console.log("Array parsing failed:", arrayError);
+              throw arrayError;
+            }
+          } else {
+            // If all else fails, try to extract any JSON object
+            const objectMatch = jsonString.match(/\{[\s\S]*\}/);
+            if (objectMatch) {
+              review = JSON.parse(objectMatch[0]);
+            } else {
+              throw new Error("No valid JSON found in response");
+            }
+          }
+        }
       } catch (e) {
         console.error("Error parsing AI response:", e);
-        console.log("Raw response:", aiResponse.substring(0, 500) + "...");
+        console.log("Full raw response:", aiResponse);
         
-        // Fallback: create a simple review object
+        // Create a manual review object by parsing text
+        const lines = aiResponse.split('\n');
+        const issues = [];
+        let currentIssue = null;
+        let summary = "Code review completed with parsing issues";
+        
+        // Try to extract information from text format
+        for (const line of lines) {
+          if (line.includes('line:') || line.includes('Line:') || line.toLowerCase().startsWith('line ')) {
+            // Start a new issue
+            if (currentIssue) issues.push(currentIssue);
+            currentIssue = { 
+              line: parseInt(line.replace(/[^0-9]/g, '')) || null,
+              issue: "",
+              suggestion: "",
+              severity: "medium"
+            };
+          } else if (currentIssue && (line.includes('issue:') || line.includes('Issue:') || line.includes('problem:'))) {
+            currentIssue.issue = line.split(':')[1]?.trim() || line;
+          } else if (currentIssue && (line.includes('suggest') || line.includes('fix') || line.includes('solution'))) {
+            currentIssue.suggestion = line.split(':')[1]?.trim() || line;
+          } else if (line.includes('summary') || line.includes('Summary')) {
+            summary = line.split(':')[1]?.trim() || summary;
+          }
+        }
+        
+        // Add the last issue if there is one
+        if (currentIssue) issues.push(currentIssue);
+        
+        // Fallback: create a review object from the extracted information
         review = {
-          issues: [],
-          summary: "Unable to parse AI response. Please check the model output format."
+          issues: issues.length > 0 ? issues : [],
+          summary: summary
         };
+        
+        console.log("Created fallback review object:", JSON.stringify(review, null, 2));
       }
       
       // Add file-specific issues to overall list
@@ -198,12 +268,12 @@ Format your response as JSON:
   
   // Create a PR review with a summary
   if (overallIssues.length > 0 || overallSuggestions.length > 0) {
-    console.log(overallIssues)
     // Create summary comment
-    const summaryBody = `# ReviewRanger AI: Code Review Summary
+    console.log(overallIssues);
+    const summaryBody = `# ReviewRanger: Code Review Summary
 
 ${overallIssues.length > 0 ? `## Issues Found (${overallIssues.length})
-${overallIssues.map(issue => `- **${issue.severity}** [${issue.file}${issue.line ? `:${issue.line}` : ''}]: ${issue.issue}`).join('\n')}` : ''}
+${overallIssues.map(issue => `- **${issue.severity.toUpperCase()}** [${issue.file}${issue.line ? `:${issue.line}` : ''}]: ${issue.issue}`).join('\n')}` : ''}
 
 ${overallSuggestions.length > 0 ? `## Summary by File
 ${overallSuggestions.join('\n\n')}` : ''}

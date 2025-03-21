@@ -1,4 +1,4 @@
-name: AI PR Reviewer
+name: ReviewRanger AI
 
 on:
   pull_request:
