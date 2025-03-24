@@ -41,15 +41,94 @@ async function callAIModel(prompt) {
   }
 }
 
+// Gets related files based on imports and dependencies
+async function getRelatedFiles(filename, content, pullRequest) {
+  const relatedFiles = new Set();
+  const importRegex = /(?:import|require|from|@import)\s+['"](\.\/|\.\.\/|\/)?([^'"]+)['"]/g;
+  
+  let match;
+  while ((match = importRegex.exec(content)) !== null) {
+    let importPath = match[2];
+    
+    // Handle relative paths
+    if (match[1]) {
+      importPath = path.join(path.dirname(filename), match[1] + importPath);
+    }
+    
+    // Add common extensions if missing
+    if (!path.extname(importPath)) {
+      for (const ext of ['.js', '.jsx', '.ts', '.tsx', '.scss', '.css']) {
+        const fullPath = `${importPath}${ext}`;
+        relatedFiles.add(fullPath);
+        
+        // Also try index files in directories
+        if (!fullPath.endsWith('/index' + ext)) {
+          relatedFiles.add(path.join(importPath, 'index' + ext));
+        }
+      }
+    } else {
+      relatedFiles.add(importPath);
+    }
+  }
+  
+  // Fetch content of related files
+  const relatedContents = {};
+  for (const relatedFile of relatedFiles) {
+    try {
+      const { data: fileData } = await octokit.repos.getContent({
+        owner,
+        repo,
+        path: relatedFile,
+        ref: pullRequest.head.ref
+      });
+      
+      if (fileData.content) {
+        const fileContent = Buffer.from(fileData.content, 'base64').toString();
+        // Only include if file is not too large
+        if (fileContent.length < 10000) {
+          relatedContents[relatedFile] = fileContent;
+        }
+      }
+    } catch (error) {
+      // File might not exist, that's okay
+      console.log(`Could not fetch related file: ${relatedFile}`);
+    }
+  }
+  
+  return relatedContents;
+}
+
+// Fetch the original version of the file (before PR changes)
+async function getOriginalFile(filename, pullRequest) {
+  try {
+    const { data: fileData } = await octokit.repos.getContent({
+      owner,
+      repo,
+      path: filename,
+      ref: pullRequest.base.ref  // Base branch (typically main/master)
+    });
+    
+    if (fileData.content) {
+      return Buffer.from(fileData.content, 'base64').toString();
+    }
+    return null;  // File doesn't exist in base branch (new file)
+  } catch (error) {
+    return null;  // File doesn't exist in base branch (new file)
+  }
+}
+
 async function main() {
   console.log(`Starting AI review for PR #${pull_number}`);
   
-  // Get the PR diff
+  // Get the PR details
   const { data: pullRequest } = await octokit.pulls.get({
     owner,
     repo,
     pull_number
   });
+  
+  // Get the PR description for additional context
+  const prDescription = pullRequest.body || '';
   
   // Get the files changed in this PR
   const { data: files } = await octokit.pulls.listFiles({
@@ -84,7 +163,7 @@ async function main() {
     console.log(`Reviewing: ${file.filename}`);
     
     try {
-      // Get the file content at the head commit
+      // Get the file content at the head commit (modified version)
       const { data: contentData } = await octokit.repos.getContent({
         owner,
         repo,
@@ -93,29 +172,56 @@ async function main() {
       });
       
       // Decode the content if it exists
-      let content = '';
+      let modifiedContent = '';
       if (contentData.content) {
-        content = Buffer.from(contentData.content, 'base64').toString();
+        modifiedContent = Buffer.from(contentData.content, 'base64').toString();
       }
       
       // Skip empty files
-      if (!content.trim()) {
+      if (!modifiedContent.trim()) {
         console.log(`Skipping empty file: ${file.filename}`);
         continue;
       }
       
+      // Get the original file content (before PR changes)
+      const originalContent = await getOriginalFile(file.filename, pullRequest) || '';
+      
+      // Get related files based on imports
+      const relatedFiles = await getRelatedFiles(file.filename, modifiedContent, pullRequest);
+      
       // Get the file extension to determine language
       const extension = path.extname(file.filename).substring(1);
       
+      // Create context about the file and PR
+      const fileContext = `
+This file is part of PR #${pull_number}: "${pullRequest.title}"
+PR Description: ${prDescription}
+Branch: ${pullRequest.head.ref}
+This file ${originalContent ? 'was modified' : 'is new'} in this PR.
+      `.trim();
+      
       // Create prompt for AI
       const prompt = `
-You are an expert code reviewer. Review the following ${extension} code:
+You are an expert code reviewer. Review the following changes in a ${extension} file:
 
+${originalContent ? `ORIGINAL CODE (BEFORE CHANGES):
 \`\`\`${extension}
-${content}
+${originalContent}
+\`\`\`` : "This is a new file added in this PR."}
+
+MODIFIED CODE (AFTER CHANGES):
+\`\`\`${extension}
+${modifiedContent}
 \`\`\`
 
-Please provide a detailed code review that identifies:
+FILE CONTEXT:
+${fileContext}
+
+${Object.keys(relatedFiles).length > 0 ? `RELATED FILES:
+${Object.entries(relatedFiles).map(([filename, content]) => 
+  `${filename}:\n\`\`\`\n${content.substring(0, 1000)}${content.length > 1000 ? '...(truncated)' : ''}\n\`\`\``).join('\n\n')}` : ''}
+
+Please focus your review on the changes made in this PR. Provide a detailed code review that identifies:
 1. Bugs or potential issues
 2. Security vulnerabilities
 3. Performance problems
@@ -123,9 +229,10 @@ Please provide a detailed code review that identifies:
 5. Specific suggestions for improvement
 
 For each issue, provide:
-- The line number (if applicable)
+- The line number in the MODIFIED CODE (if applicable)
 - A description of the issue
 - A suggested fix
+- Severity level (high/medium/low)
 
 Format your response as JSON:
 {
@@ -140,23 +247,24 @@ Format your response as JSON:
   "summary": "<overall_assessment>"
 }
 `;
-let review;
+      let review;
 
-  try {
-    // Get AI review from your local model
-    const aiResponse = await callAIModel(prompt);
-    console.log(aiResponse);
-    
-    // Use the improved parsing function
-    review = sanitizeAndParseJSON(aiResponse);
-    
-    console.log(review);
-    console.log(`Found ${review.issues.length} issues in the review`);
-    
-    // Rest of your code continues as before...
-  } catch (error) {
-    console.error(`Error reviewing ${file.filename}:`, error);
-  }
+      try {
+        // Get AI review from your local model
+        const aiResponse = await callAIModel(prompt);
+        console.log(aiResponse);
+        
+        // Use the improved parsing function
+        review = sanitizeAndParseJSON(aiResponse);
+        
+        console.log(review);
+        console.log(`Found ${review.issues.length} issues in the review`);
+        
+      } catch (error) {
+        console.error(`Error reviewing ${file.filename}:`, error);
+        continue;
+      }
+      
       // Add file-specific issues to overall list
       if (review.issues && review.issues.length > 0) {
         overallIssues.push(...review.issues.map(issue => ({
@@ -227,7 +335,7 @@ main().catch(error => {
   process.exit(1);
 });
 
-// Add this improved JSON parsing function to your review-pr.js file
+// JSON parsing function
 function sanitizeAndParseJSON(jsonString) {
     console.log("Attempting to sanitize and parse AI response...");
     
@@ -376,4 +484,3 @@ function sanitizeAndParseJSON(jsonString) {
       summary: summary
     };
   }
-  
