@@ -594,6 +594,7 @@ const EcommerceApp = () => {
             <Laptop className="text-blue-600" />
             <h1 className="ml-2 text-xl font-bold">TechShop</h1>
           </div>
+        
           
           <div className="flex items-center space-x-4">
             {currentPage !== 'login' && currentPage !== 'cart' && (
